@@ -1,2 +1,2 @@
 # solis-data
-A thing to upload solis solar data to a database for reasons
+A bit of python to get data out of the Solis API and into a MySQL database
