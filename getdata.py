@@ -128,10 +128,6 @@ def main():
                  "solisSn" : os.environ.get('solisSn') }
 
 
-# Bot business
-    bot = telegram.Bot(token=os.environ.get('telegramBotToken'))
-    mychatid=os.environ.get('telegramChatId')
-
 # Database credentials for the conkers
     dbInfo = { "dbuser" : os.environ.get('dbUser'),
                "dbpass" : os.environ.get('dbPass'),
