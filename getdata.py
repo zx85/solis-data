@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # This needs the following environment variables to be created:
-#
+# This version doesn't do telegram because I do it with home assistant now
 #
 # export solisURL="https://www.soliscloud.com:13333"
 # export solisPath="/v1/api/inverterDetail"
@@ -9,10 +9,6 @@
 # export solisSecret="YOUR_API_SECRET"
 # export solisId="YOUR_SOLIS_ID"
 # export solisSn="YOUR_INVERTER_SERIAL_NUMBER"
-
-# Telegram goodness
-# export telegramBotToken="YOUR_TELEGRAM_BOT_TOKEN"
-# export telegramChatId="YOUR_PERSONAL_CHAT_ID"
 
 # Database credentials
 # export dbUser="YOUR_DB_USER"
@@ -36,43 +32,14 @@ import requests
 import time
 import jmespath
 from pathlib import Path
-# I think this is python-telegram-bot
-import telegram
 # important - needs to run pip3 install python-mysql-connector
 import mysql.connector
 
-
-# Push message doings
-def sendmessage(bot,chat_id,thisMessage):
-    bot.send_message(chat_id=chat_id,text=thisMessage)
 
 # Local time doings
 def localtime(inputTime):
         return time.strftime('%Y-%m-%d %H:%M:%S %Z', time.localtime(inputTime))
 
-
-def sendTelegram(solar_usage,solar_last,bot,mychatid):
-# Battery Percentage is 100
-    if solar_usage['batteryPer']==100 and solar_last['batteryPer']<100:
-        try:
-            sendmessage(bot,mychatid,"Solar: Battery is 100%")
-        except Exception as e:
-            print ("Battery 100% didn't work sorry because this: " + str(e))
-    
-    
-# Battery Percentage is less than 20
-    if solar_usage['batteryPer']<20 and solar_last['batteryPer']>=20:
-        try:
-            sendmessage(bot,mychatid,"Solar: Battery has gone under 20%")
-        except Exception as e:
-            print ("Battery < 20% didn't work sorry because this: " + str(e))
-    
-# Solar In is over 2.5kW
-    if solar_usage['solarIn']>=2.5 and solar_last['solarIn']<2.5:
-        try:
-            sendmessage(bot,mychatid,"Solar: Incoming in has gone over 2.5kW")
-        except Exception as e:
-            print ("Incoming > 2.5kW didn't work sorry because this: " + str(e))
 
 def getSolis(solisInfo,jmespathfilter):
     solar_usage={}
@@ -221,10 +188,6 @@ def main():
     if latest_timestamp != solar_usage['timestamp']:
         print("Thems is different so let's go")
 
-# Send some telegram messages if you like
-        sendTelegram(solar_usage,solar_last,bot,mychatid)
-    
-    
 # Update the new stuff
     
         solar_db=solar_usage.copy()
