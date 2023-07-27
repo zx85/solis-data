@@ -86,12 +86,13 @@ def getSolis(solisInfo,jmespathfilter):
     except Exception as e:
         print ("get solar_usage didn't work sorry because this: " + str(e))
 
-    solar_usage['year']=(time.strftime('%Y', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-    solar_usage['month']=(time.strftime('%m', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-    solar_usage['day']=(time.strftime('%d', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-    solar_usage['hour']=(time.strftime('%H', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-    solar_usage['minute']=(time.strftime('%M', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-    solar_usage['timestamp']=(time.strftime('%Y%m%d%H%M', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+    if 'timestamp' in solar_usage:
+        solar_usage['year']=(time.strftime('%Y', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+        solar_usage['month']=(time.strftime('%m', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+        solar_usage['day']=(time.strftime('%d', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+        solar_usage['hour']=(time.strftime('%H', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+        solar_usage['minute']=(time.strftime('%M', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+        solar_usage['timestamp']=(time.strftime('%Y%m%d%H%M', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
 
     return solar_usage
  
@@ -145,55 +146,60 @@ def main():
 
     solar_usage=getSolis(solisInfo,jmespathfilter)
     
+
+# Using timestamp as the success factor because why not
     
-    print("solis timestamp is: "+solar_usage['timestamp'])
+    if "timestamp" in solar_usage:
+        print("solis timestamp is: "+solar_usage['timestamp'])
     
     # database bits
     
-    try:
-        cnx = mysql.connector.connect(user=dbInfo['dbuser'], password=dbInfo['dbpass'],
-                                      host=dbInfo['dbhost'], port=dbInfo['dbport'],
-                                      database=dbInfo['dbname'], auth_plugin='mysql_native_password')
-    except Exception as e:
-        print ("DB select didn't work sorry because " + str(e))
-    
-    table=dbInfo['dbtable']
-    
-    # Get the latest stuff
-    cursor = cnx.cursor()
-    sql="select year,month,day,hour,minute,powerUsed, gridIn, solarIn, batteryIn, batteryPer from solar5 order by updated_timstm desc limit 1;"
-    cursor.execute(sql)
-    data=cursor.fetchone()
-    cursor.close()
-    solar_last={}
-    solar_last['year'],solar_last['month'],solar_last['day'],solar_last['hour'],solar_last['minute'],solar_last['powerUsed'], solar_last['gridIn'], solar_last['solarIn'], solar_last['batteryIn'], solar_last['batteryPer']=[data[i] for i in (range(len(data)))]
-    
-    latest_timestamp=(f"{solar_last['year']:04d}{solar_last['month']:02d}{solar_last['day']:02d}{solar_last['hour']:02d}{solar_last['minute']:02d}")
-    print("latest_timestamp is: "+latest_timestamp)
-    
+        try:
+            cnx = mysql.connector.connect(user=dbInfo['dbuser'], password=dbInfo['dbpass'],
+                                          host=dbInfo['dbhost'], port=dbInfo['dbport'],
+                                          database=dbInfo['dbname'], auth_plugin='mysql_native_password')
+        except Exception as e:
+            print ("DB select didn't work sorry because " + str(e))
+        
+        table=dbInfo['dbtable']
+        
+        # Get the latest stuff
+        cursor = cnx.cursor()
+        sql="select year,month,day,hour,minute,powerUsed, gridIn, solarIn, batteryIn, batteryPer from solar5 order by updated_timstm desc limit 1;"
+        cursor.execute(sql)
+        data=cursor.fetchone()
+        cursor.close()
+        solar_last={}
+        solar_last['year'],solar_last['month'],solar_last['day'],solar_last['hour'],solar_last['minute'],solar_last['powerUsed'], solar_last['gridIn'], solar_last['solarIn'], solar_last['batteryIn'], solar_last['batteryPer']=[data[i] for i in (range(len(data)))]
+        
+        latest_timestamp=(f"{solar_last['year']:04d}{solar_last['month']:02d}{solar_last['day']:02d}{solar_last['hour']:02d}{solar_last['minute']:02d}")
+        print("latest_timestamp is: "+latest_timestamp)
+        
 
 # Only need to run this bit if the data is different - means we can run it every minute
-    if latest_timestamp != solar_usage['timestamp']:
-        print("Thems is different so let's go")
+        if latest_timestamp != solar_usage['timestamp']:
+            print("Thems is different so let's go")
 
 # Update the new stuff
     
-        solar_db=solar_usage.copy()
-        del solar_db['timestamp']
-        placeholders = ', '.join(['%s'] * len(solar_db))
-        columns = ', '.join(solar_db.keys())
-        sql = "INSERT INTO %s ( %s ) VALUES ( %s )" % (table, columns, placeholders)
-        try:
-            cursor=cnx.cursor()
-            cursor.execute(sql, list(solar_db.values()))
-            cnx.commit()
-            cursor.close()
-            cnx.close()
-        except Exception as e:
-            print ("DB insert didn't work sorry because this: " + str(e))
-        
-# Do the local file
-        localFile(solar_usage,latestFileName)
+            solar_db=solar_usage.copy()
+            del solar_db['timestamp']
+            placeholders = ', '.join(['%s'] * len(solar_db))
+            columns = ', '.join(solar_db.keys())
+            sql = "INSERT INTO %s ( %s ) VALUES ( %s )" % (table, columns, placeholders)
+            try:
+                cursor=cnx.cursor()
+                cursor.execute(sql, list(solar_db.values()))
+                cnx.commit()
+                cursor.close()
+                cnx.close()
+            except Exception as e:
+                print ("DB insert didn't work sorry because this: " + str(e))
+            
+    # Do the local file
+            localFile(solar_usage,latestFileName)
+    else:
+        print("Nothing back from Solis this time - sorry.")
     
 if __name__ == "__main__":
     main()
