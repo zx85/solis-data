@@ -81,25 +81,17 @@ def getSolis(solisInfo,jmespathfilter):
     # Make the call
     try:
         resp = Session.post(req, data=Body, headers=header,timeout=60)
+        print("response code: "+str(resp.status_code))
         solar_usage = jmespath.search(jmespathfilter,resp.json())
     except Exception as e:
         print ("get solar_usage didn't work sorry because this: " + str(e))
 
-    if 'timestamp' in solar_usage:
-        solar_usage['year']=(time.strftime('%Y', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-        solar_usage['month']=(time.strftime('%m', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-        solar_usage['day']=(time.strftime('%d', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-        solar_usage['hour']=(time.strftime('%H', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-        solar_usage['minute']=(time.strftime('%M', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-        solar_usage['timestamp']=(time.strftime('%Y%m%d%H%M', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
-    else:
-        solar_usage['year']=(time.strftime('%Y', time.gmtime(int(time.time()))))
-        solar_usage['month']=(time.strftime('%m', time.gmtime(int(time.time()))))
-        solar_usage['day']=(time.strftime('%d', time.gmtime(int(time.time()))))
-        solar_usage['hour']=(time.strftime('%H', time.gmtime(int(time.time()))))
-        solar_usage['minute']=(time.strftime('%M', time.gmtime(int(time.time()))))
-        solis_usage['timestamp']=(time.strftime('%Y%m%d%H%M', time.gmtime(int(time.time()))))
-
+    solar_usage['year']=(time.strftime('%Y', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+    solar_usage['month']=(time.strftime('%m', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+    solar_usage['day']=(time.strftime('%d', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+    solar_usage['hour']=(time.strftime('%H', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+    solar_usage['minute']=(time.strftime('%M', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
+    solar_usage['timestamp']=(time.strftime('%Y%m%d%H%M', time.gmtime(int(int(solar_usage['timestamp'])/1000))))
 
     return solar_usage
  

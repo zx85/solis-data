@@ -54,6 +54,8 @@ def localtime(inputTime):
 solisInfo = {"solisUrl" : os.environ.get('solisUrl'),
              "solisPath" : os.environ.get('solisDayPath'),
              "solisKey" : os.environ.get('solisKey'),
+             "solisId" : os.environ.get('solisId'),
+             "solisSn" : os.environ.get('solisSn'),
              "solisSecret" : bytes(os.environ.get('solisSecret'),'utf-8') }
 
 # Bot business
@@ -88,7 +90,7 @@ Session = requests.Session()
 
 now = datetime.now(timezone.utc)
 Date = now.strftime("%a, %d %b %Y %H:%M:%S GMT")
-Body = '{"time":"' + date_query +'", "pageSize":100}'
+Body = '{"time":"' + date_query +'", "pageSize":100, "sn":"'+solisInfo['solisSn']+'", "id":"'+solisInfo['solisId']+'"}'
 Content_MD5 = base64.b64encode(hashlib.md5(Body.encode('utf-8')).digest()).decode('utf-8')
 encryptStr = (VERB + "\n"
     + Content_MD5 + "\n"
@@ -109,11 +111,25 @@ header = { "Content-MD5":Content_MD5,
             "Date":Date,
             "Authorization":Authorization
             }
-try:
-    resp = Session.post(req, data=Body, headers=header,timeout=60)
-    solar_usage = jmespath.search(jmespathfilter,resp.json())
-except Exception as e:
-    print ("getting the API didn't work sorry - here's why: " + str(e))
+
+status_code=0
+retry_count=0
+
+while status_code!=200 and retry_count<10:
+    try:
+        resp = Session.post(req, data=Body, headers=header,timeout=60)
+        status_code=resp.status_code
+        print ("Response status code: "+str(status_code))
+        print ("Here is the resultant")
+        print (json.dumps(resp.json()))
+        print ("#####################")
+        solar_usage = jmespath.search(jmespathfilter,resp.json())
+    except Exception as e:
+        print ("getting the API didn't work sorry - here's why: " + str(e))
+    if status_code!=200:
+        retry_count=retry_count+1
+        time.sleep(10)
+        print ("Retrying for attempt "+str(retry_count))
     
 # output file
 csv_filename = "/media/dave/james/data/solar-"+date_query[0:7]+".csv"
