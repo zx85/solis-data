@@ -164,15 +164,21 @@ def get_solis_data(solisInfo, date_query):
 def get_price_data(octopusInfo, date_query):
     # print(f"Getting agile price data for {date_query}...")
     results = {}
-    auth = "Basic " + base64.b64encode(
-        "sk_live_4EZ0vNYbCgA2gU466C9ygwfY:".encode("UTF-8")
-    ).decode("UTF-8")
+    auth = "Basic " + base64.b64encode(octopusInfo["APIKey"].encode("UTF-8")).decode(
+        "UTF-8"
+    )
     url = f"{octopusInfo['URL']}/v1/products/{octopusInfo['Tariff']}/electricity-tariffs/E-1R-{octopusInfo['Tariff']}-C/standard-unit-rates/?period_from={utc_calc(date_query)}&period_to={utc_calc(date_query,1)}"
     # print(f"URL is {url}")
     Session = requests.Session()
     header = {"Authorization": auth}
     try:
         resp = Session.get(url, headers=header, timeout=60)
+        status_code = resp.status_code
+        print("Response status code: " + str(status_code))
+        print("Here is the resultant")
+        print(json.dumps(resp.json()))
+        print("#####################")
+
         results = resp.json()
     except Exception as e:
         print("Agile data request failed because " + str(e))
@@ -181,15 +187,20 @@ def get_price_data(octopusInfo, date_query):
 
 def get_consumed_data(octopusInfo, date_query):
     results = {}
-    auth = "Basic " + base64.b64encode(
-        "sk_live_4EZ0vNYbCgA2gU466C9ygwfY:".encode("UTF-8")
-    ).decode("UTF-8")
+    auth = "Basic " + base64.b64encode(octopusInfo["APIKey"].encode("UTF-8")).decode(
+        "UTF-8"
+    )
     url = f"{octopusInfo['URL']}/v1/electricity-meter-points/{octopusInfo['MPAN']}/meters/{octopusInfo['SN']}/consumption/?period_from={utc_calc(date_query)}&period_to={utc_calc(date_query,1)}"
     # print(f"URL is {url}")
     Session = requests.Session()
     header = {"Authorization": auth}
     try:
         resp = Session.get(url, headers=header, timeout=60)
+        status_code = resp.status_code
+        print("Response status code: " + str(status_code))
+        print("Here is the resultant")
+        print(json.dumps(resp.json()))
+        print("#####################")
         results = resp.json()
     except Exception as e:
         print("Consumption data request failed because " + str(e))
