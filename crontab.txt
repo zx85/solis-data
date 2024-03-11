@@ -1,0 +1,8 @@
+# Get yesterday's solar doings - has to be done well after midnight because BST chiz - do it a few times just in case
+# 05,35 07-09 * * * /usr/local/scripts/solisday_wrap.sh
+
+# Get yesterday's octopus doings - has to be every half hour because it takes a while to upload chiz chiz
+*/30 * * * *  /usr/local/scripts/octopusday_wrap.sh
+
+# Get the five minute solar doings
+# * * * * * /usr/local/scripts/solisdata_wrap.sh

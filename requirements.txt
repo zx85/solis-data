@@ -1,0 +1,9 @@
+mysql-connector-python
+pytz
+requests
+jmespath
+# python-telegram-bot is now async and would need to be recoded
+python-telegram-bot<=13
+# breaks with appengine failure if these two aren't set
+urllib3==1.26.15
+requests-toolbelt==0.10.1

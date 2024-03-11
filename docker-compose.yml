@@ -1,0 +1,17 @@
+version: '3'
+services:
+  solarcron:
+    container_name: solarcron
+    build:
+      context: /home/james/solis-data
+      dockerfile: Dockerfile
+    image: result/latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - docker_solar-net
+networks:
+  docker_solar-net:
+    external: true
+
