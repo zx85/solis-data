@@ -310,8 +310,8 @@ def main():
         except Exception as e:
             print("DB insert didn't work sorry because this: " + str(e))
 
-        # Do the local file
-        localFile(solar_usage, latestFileName)
+        # There is no local file
+        # localFile(solar_usage, latestFileName)
 
 
 if __name__ == "__main__":

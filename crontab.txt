@@ -5,4 +5,4 @@
 */30 * * * *  /usr/local/scripts/octopusday_wrap.sh
 
 # Get the five minute solar doings
-# * * * * * /usr/local/scripts/solisdata_wrap.sh
+* * * * * /usr/local/scripts/solisdata_wrap.sh
