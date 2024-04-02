@@ -83,12 +83,8 @@ def send_telegram_message(bot, chat_id, date_query, overnight):
     bot.send_message(chat_id=chat_id, text=message_str)
 
 
-def localtime(inputTime):
-    logger.debug(f"running localtime function - localtime is {localtime}")
-    return time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime(inputTime))
 
-
-# Local time doings
+# UTC time doings
 def utc_calc(time_string, day_diff=0):
     logger.debug(
         f"running utc_calc function - time_string is {time_string} - day_diff is {day_diff}"
@@ -98,6 +94,16 @@ def utc_calc(time_string, day_diff=0):
     local_dt = local.localize(naive, is_dst=None)
     utc_dt = local_dt.astimezone(pytz.utc) + timedelta(days=day_diff)
     return utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# Local time doings
+def local_calc(time_string, day_diff=0):
+    logger.debug(
+        f"running local_calc function - time_string is {time_string} - day_diff is {day_diff}"
+    )
+    local = pytz.timezone("Europe/London")
+    utc_dt = datetime.strptime(time_string, "%Y-%m-%dT%H:%M:%SZ")
+    local_dt = pytz.utc.localize(utc_dt, is_dst=None).astimezone(local) + timedelta(days=day_diff)
+    return local_dt.isoformat().replace("+00:00","Z")
 
 
 def get_price_data(octopusInfo, date_query):
@@ -123,6 +129,11 @@ def get_price_data(octopusInfo, date_query):
     except Exception as e:
         logger.error("Agile data request failed because " + str(e))
     logger.info("end of get_price_data function")
+
+    # add a localised time in to make it doable
+    for each_time in results['results']:
+        logger.debug(f"changing {each_time['valid_from']} to {local_calc(each_time['valid_from'],0)}")
+        each_time['local_valid_from']=local_calc(each_time['valid_from'],0)
     return results
 
 
@@ -227,7 +238,7 @@ def update_octopus_usage(dbInfo, octopusInfo, date_query):
             for each_result in consumed_data["results"]:
                 for each_price in price_data["results"]:
                     id = {}
-                    if each_price["valid_from"] == each_result["interval_start"]:
+                    if each_price["local_valid_from"] == each_result["interval_start"]:
                         # this is where the database stuff comes in
                         id["year"] = each_result["interval_start"][:4]
                         id["month"] = each_result["interval_start"][5:7]
@@ -308,3 +319,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
