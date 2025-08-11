@@ -20,6 +20,17 @@ import telegram
 # important - needs to run pip3 install python-mysql-connector
 import mysql.connector
 
+import logging
+
+# Create a logger
+logger = logging.getLogger("")
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
 
 # This needs the following environment variables to be created:
 #
@@ -44,36 +55,33 @@ import mysql.connector
 # export dbTable="YOUR_DB_TABLE" # if you use the schema in solarday.sql it will be solarDay
 # export dbPort="YOUR_DB_PORT" # normally 3306
 
-# Octopus variables
-# export octopusURL="https://api.octopus.energy"
-# export octopusTariff="YOUR_OCTOPUS_AGILE_TARIFF"
-# export octopusAPIKey="YOUR_OCTOPUS_API_KEY"
-# export octopusMPAN="YOUR_SMARTMETER_MPAN"
-# export octopusSN="YOUR_SMARTMETER_SERIAL"
-# export octopusInTable="YOUR_OCTOPUSIN_TABLE" # normally octopusIn
-
 
 # Push message doings
 def sendmessage(bot, chat_id, thisMessage):
+    logger.debug(f"in sendmessage function - chat_id is {chat_id}")
     bot.send_message(chat_id=chat_id, text=thisMessage)
 
 
 def localtime(inputTime):
+    logger.debug(f"in localtime function - inputTime is {inputTime}")
     return time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime(inputTime))
 
 
 # Local time doings
 def utc_calc(time_string, day_diff=0):
+    logger.debug(f"in utc_calc - time_string is {time_string} - day_diff is {day_diff}")
     local = pytz.timezone("Europe/London")
     naive = datetime.strptime(time_string, "%Y-%m-%d")
     local_dt = local.localize(naive, is_dst=None)
     utc_dt = local_dt.astimezone(pytz.utc) + timedelta(days=day_diff)
+    logger.debug(f"End of utc_calc")
     return utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def get_solis_data(solisInfo, date_query):
+    logger.info(f"running get_solis_data function for {date_query}")
     # jmespath filter
-    jmespathfilter = "data.records[0].{totalConsumed:consumeEnergy, solarGen:produceEnergy, solarExport:gridSellEnergy, batCharge:batteryChargeEnergy, selfUse:oneSelf, gridImport:gridPurchasedEnergy, batUse:batteryDischargeEnergy}"
+    jmespathfilter = "data.records[0].{totalConsumed:consumeEnergy, solarGen:energy, solarExport:gridSellEnergy, batCharge:batteryChargeEnergy, selfUse:oneSelf, gridImport:gridPurchasedEnergy, batUse:batteryDischargeEnergy}"
     solar_usage = {}
     url = solisInfo["solisUrl"]
     CanonicalizedResource = solisInfo["solisPath"]
@@ -141,155 +149,91 @@ def get_solis_data(solisInfo, date_query):
 
     status_code = 0
     retry_count = 0
-
     while status_code != 200 and retry_count < 10:
+        logger.debug(f"into the request loop - retry count is {retry_count}")
         try:
             resp = Session.post(req, data=Body, headers=header, timeout=60)
             status_code = resp.status_code
-            print("Response status code: " + str(status_code))
-            print("Here is the resultant")
-            print(json.dumps(resp.json()))
-            print("#####################")
+            logger.info(f"Response status code: {str(status_code)}")
+            logger.debug("\nHere is the resultant solis doings")
+            logger.debug(json.dumps(resp.json()))
+            logger.debug("\n##################################\n")
             solar_usage = jmespath.search(jmespathfilter, resp.json())
         except Exception as e:
-            print("getting the API didn't work sorry - here's why: " + str(e))
+            logger.error(f"getting the API didn't work sorry - here's why: {str(e)}")
         if status_code != 200:
             retry_count = retry_count + 1
             time.sleep(10)
-            print("Retrying for attempt " + str(retry_count))
-
+            logger.info("Retrying for attempt " + str(retry_count))
+    logger.debug(f"End of get_solis_data")
     return solar_usage
 
 
-def get_price_data(octopusInfo, date_query):
-    # print(f"Getting agile price data for {date_query}...")
-    results = {}
-    auth = "Basic " + base64.b64encode(octopusInfo["APIKey"].encode("UTF-8")).decode(
-        "UTF-8"
-    )
-    url = f"{octopusInfo['URL']}/v1/products/{octopusInfo['Tariff']}/electricity-tariffs/E-1R-{octopusInfo['Tariff']}-C/standard-unit-rates/?period_from={utc_calc(date_query)}&period_to={utc_calc(date_query,1)}"
-    # print(f"URL is {url}")
-    Session = requests.Session()
-    header = {"Authorization": auth}
-    try:
-        resp = Session.get(url, headers=header, timeout=60)
-        status_code = resp.status_code
-        print("Response status code: " + str(status_code))
-        print("Here is the resultant")
-        print(json.dumps(resp.json()))
-        print("#####################")
-
-        results = resp.json()
-    except Exception as e:
-        print("Agile data request failed because " + str(e))
-    return results
-
-
-def get_consumed_data(octopusInfo, date_query):
-    results = {}
-    auth = "Basic " + base64.b64encode(octopusInfo["APIKey"].encode("UTF-8")).decode(
-        "UTF-8"
-    )
-    url = f"{octopusInfo['URL']}/v1/electricity-meter-points/{octopusInfo['MPAN']}/meters/{octopusInfo['SN']}/consumption/?period_from={utc_calc(date_query)}&period_to={utc_calc(date_query,1)}"
-    # print(f"URL is {url}")
-    Session = requests.Session()
-    header = {"Authorization": auth}
-    try:
-        resp = Session.get(url, headers=header, timeout=60)
-        status_code = resp.status_code
-        print("Response status code: " + str(status_code))
-        print("Here is the resultant")
-        print(json.dumps(resp.json()))
-        print("#####################")
-        results = resp.json()
-    except Exception as e:
-        print("Consumption data request failed because " + str(e))
-    return results
-
-
 def write_csv_file(csv_filename_prefix, date_query, solar_usage):
-    outstring = ""
-    csv_filename = csv_filename_prefix + date_query[0:7] + ".csv"
-    # Do something if the file doesn't exist
-    if not Path(csv_filename).exists():
-        filemode = "wt"
-        print("No file found - creating one")
-        outstring = "date,"
-        for key, value in solar_usage.items():
-            outstring = outstring + key + ","
-        outstring = outstring[:-1] + "\n"
-    else:
-        filemode = "a+"
+    if solar_usage:
+        logger.info(f"running write_csv_file function for {date_query}")
+        outstring = ""
+        csv_filename = csv_filename_prefix + date_query[0:7] + ".csv"
+        logger.info(f"preparing to write {csv_filename} file")
 
-    outstring = outstring + date_query + ","
-    for key, value in solar_usage.items():
-        outstring = outstring + str(value) + ","
-    outstring = outstring[:-1] + "\n"
-    csv_file = open(csv_filename, filemode)
-    csv_file.write(outstring)
-    csv_file.close()
+        # Do something if the file doesn't exist
+        if not Path(csv_filename).exists():
+            filemode = "wt"
+            logger.warning("No file found - creating one")
+            outstring = "date,"
+            for key, value in solar_usage.items():
+                outstring = outstring + key + ","
+            outstring = outstring[:-1] + "\n"
+        else:
+            filemode = "a+"
+
+        outstring = outstring + date_query + ","
+        for key, value in solar_usage.items():
+            outstring = outstring + str(value) + ","
+        outstring = outstring[:-1] + "\n"
+        csv_file = open(csv_filename, filemode)
+        csv_file.write(outstring)
+        csv_file.close()
+    else:
+        logger.debug("No solar_usage data - skipping to the end of write_csv_file")
+    logger.debug(f"End of write_csv_file")
 
 
 def send_telegram_message(bot, mychatid, date_query, solar_usage):
-    outstring = "Data for " + date_query + ":\n"
-    for key, value in solar_usage.items():
-        outstring = outstring + key + ": " + str(value) + "\n"
-    outstring = outstring + "\n\n"
-    for key, value in solar_usage.items():
-        outstring = outstring + str(value) + ","
-    outstring = outstring[:-1] + "\n"
-    try:
-        sendmessage(bot, mychatid, outstring)
-    except Exception as e:
-        print("Telegram failed. Sad. Here's why: " + str(e))
+    logger.info(f"running send_telegram_message for {date_query}")
+    if solar_usage:
+        outstring = "Data for " + date_query + ":\n"
+        for key, value in solar_usage.items():
+            outstring = outstring + key + ": " + str(value) + "\n"
+        outstring = outstring + "\n\n"
+        for key, value in solar_usage.items():
+            outstring = outstring + str(value) + ","
+        outstring = outstring[:-1] + "\n"
+        try:
+            sendmessage(bot, mychatid, outstring)
+        except Exception as e:
+            logger.error("Telegram failed. Sad. Here's why: " + str(e))
+    else:
+        logger.debug(
+            "No solar_usage data - skipping to the end of send_telegram_message"
+        )
+    logger.debug(f"End of send_telegram_message")
 
 
 def update_solarDay_database(dbInfo, date_query, solar_usage):
-    # Timestamp swappage for database funtimes
-    solar_usage["year"] = int(date_query.split("-")[0])
-    solar_usage["month"] = int(date_query.split("-")[1])
-    solar_usage["day"] = int(date_query.split("-")[2])
-
-    # And now we database the data
-    try:
-        cnx = mysql.connector.connect(
-            user=dbInfo["dbuser"],
-            password=dbInfo["dbpass"],
-            host=dbInfo["dbhost"],
-            port=dbInfo["dbport"],
-            database=dbInfo["dbname"],
-            auth_plugin="mysql_native_password",
-        )
-    except Exception as e:
-        print("Connecting to the database didn't work sorry. Because this: " + str(e))
-
-    table = dbInfo["dbtable"]
-    placeholders = ", ".join(["%s"] * len(solar_usage))
-    columns = ", ".join(solar_usage.keys())
-    sql = "REPLACE INTO %s ( %s ) VALUES ( %s )" % (table, columns, placeholders)
-    try:
-        cursor = cnx.cursor()
-        cursor.execute(sql, list(solar_usage.values()))
-        cnx.commit()
-        cursor.close()
-        cnx.close()
-    except Exception as e:
-        print("The insert didn't work. Here's why: " + str(e))
-
-
-def update_octopus_usage(dbInfo, octopusInfo, date_query):
-    print(f"Processing Octopus agile usage data for {date_query}")
-    table = octopusInfo["InTable"]
-
-    price_data = get_price_data(octopusInfo, date_query)
-    consumed_data = get_consumed_data(octopusInfo, date_query)
-    if "results" not in price_data or "results" not in consumed_data:
-        if "results" not in price_data:
-            print("No results in price_data - please try again later")
-        if "results" not in consumed_data:
-            print("No results in consumed_data - please try again later")
-    else:
+    logger.info(f"running update_solarDay_database function for {date_query}")
+    if solar_usage:
+        new_data = False
         db_ready = False
+        # Timestamp swappage for database funtimes
+        solar_usage["year"] = int(date_query.split("-")[0])
+        solar_usage["month"] = int(date_query.split("-")[1])
+        solar_usage["day"] = int(date_query.split("-")[2])
+
+        logger.debug(
+            f"making the DB connection to {dbInfo['dbname']} on {dbInfo['dbhost']}"
+        )
+        # And now we database the data
         try:
             cnx = mysql.connector.connect(
                 user=dbInfo["dbuser"],
@@ -301,36 +245,63 @@ def update_octopus_usage(dbInfo, octopusInfo, date_query):
             )
             db_ready = True
         except Exception as e:
-            print("DB connection didn't work sorry because " + str(e))
-
+            logger.error(
+                f"Connecting to the database didn't work sorry. Because this: {str(e)}"
+            )
         if db_ready:
-            for each_result in consumed_data["results"]:
-                for each_price in price_data["results"]:
-                    id = {}
-                    if each_price["valid_from"] == each_result["interval_start"]:
-                        # this is where the database stuff comes in
-                        id["year"] = each_result["interval_start"][:4]
-                        id["month"] = each_result["interval_start"][5:7]
-                        id["day"] = each_result["interval_start"][8:10]
-                        id["hour"] = each_result["interval_start"][11:13]
-                        id["minute"] = each_result["interval_start"][14:16]
-                        id["consumed"] = each_result["consumption"]
-                        id["price"] = each_price["value_inc_vat"]
-                        placeholders = ", ".join(["%s"] * len(id))
-                        columns = ", ".join(id.keys())
-                        sql = "REPLACE INTO %s ( %s ) VALUES ( %s )" % (
-                            table,
-                            columns,
-                            placeholders,
-                        )
-                        try:
-                            cursor = cnx.cursor()
-                            cursor.execute(sql, list(id.values()))
-                            cnx.commit()
-                            cursor.close()
-                        except Exception as e:
-                            print("The insert didn't work. Here's why: " + str(e))
-            cnx.close()
+            table = dbInfo["dbtable"]
+
+            # Check to see if there's data there already - avoid duplicating messages
+        if db_ready:
+            # check to see if there's already data
+            logger.debug(f"Checking to see if there's already data for {date_query}")
+
+            sql = (
+                "select count(totalConsumed) as `QTY` from %s where year= %s and month = %s and day = %s"
+                % (
+                    table,
+                    int(date_query[:4]),
+                    int(date_query[5:7]),
+                    int(date_query[8:10]),
+                )
+            )
+            cursor = cnx.cursor()
+            try:
+                cursor.execute(sql)
+                for (QTY,) in cursor:
+                    if int(QTY) == 0:
+                        new_data = True
+            except Exception as e:
+                logger.error(
+                    f"current data select query didn't work sorry because {str(e)}"
+                )
+            cursor.close()
+
+            # do the DB bit
+            logger.debug(f"Building the REPLACE INTO query for {date_query}")
+            placeholders = ", ".join(["%s"] * len(solar_usage))
+            columns = ", ".join(solar_usage.keys())
+            sql = "REPLACE INTO %s ( %s ) VALUES ( %s )" % (
+                table,
+                columns,
+                placeholders,
+            )
+            logger.debug(f"running the REPLACE INTO sql on {dbInfo['dbtable']}")
+            try:
+                cursor = cnx.cursor()
+                cursor.execute(sql, list(solar_usage.values()))
+                cnx.commit()
+                cursor.close()
+                cnx.close()
+            except Exception as e:
+                logger.error(f"The REPLACE INTO didn't work. Here's why: {str(e)}")
+    else:
+        logger.debug(
+            "No solar_usage data - skipping to the end of update_solarDay_database"
+        )
+
+    logger.debug(f"End of update_solarDay_database")
+    return new_data
 
 
 def main():
@@ -358,16 +329,6 @@ def main():
         "dbtable": os.environ.get("dbDayTable"),
     }
 
-    # Octopus goodies
-    octopusInfo = {
-        "URL": os.environ.get("octopusURL"),
-        "Tariff": os.environ.get("octopusTariff"),
-        "APIKey": os.environ.get("octopusAPIKey"),
-        "MPAN": os.environ.get("octopusMPAN"),
-        "SN": os.environ.get("octopusSN"),
-        "InTable": os.environ.get("octopusInTable"),
-    }
-
     # text output file
     csv_filename_prefix = "/media/dave/james/data/solar-"
 
@@ -380,17 +341,20 @@ def main():
     # get the solar data
     solar_usage = get_solis_data(solisInfo, date_query)
 
-    # Send the message
-    send_telegram_message(bot, mychatid, date_query, solar_usage)
+    # update the database
+    new_data = update_solarDay_database(dbInfo, date_query, solar_usage)
 
-    # Update solarDay database table
-    update_solarDay_database(dbInfo, date_query, solar_usage)
+    if new_data:
+        logger.debug("New data - so update the csv and send the telegram message")
+        # Send the message
+        send_telegram_message(bot, mychatid, date_query, solar_usage)
 
-    # do the Octopus stuff
-    update_octopus_usage(dbInfo, octopusInfo, date_query)
-
-    # write the csv file
-    write_csv_file(csv_filename_prefix, date_query, solar_usage)
+        # write the csv file
+        write_csv_file(csv_filename_prefix, date_query, solar_usage)
+    else:
+        logger.debug(
+            "Data already in the DB - no need to update the csv and send the telegram message"
+        )
 
 
 if __name__ == "__main__":
