@@ -10,13 +10,8 @@
 # export solisId="YOUR_SOLIS_ID"
 # export solisSn="YOUR_INVERTER_SERIAL_NUMBER"
 
-# Database credentials
-# export dbUser="YOUR_DB_USER"
-# export dbPass="YOUR_DB_PASS"
-# export dbHost="YOUR_DB_HOST"
-# export dbName="YOUR_DB_NAME" # if you use the schema in solar.sql it will be solar
-# export dbTable="YOUR_DB_TABLE" # if you use the schema in solar.sql it will be solar5
-# export dbPort="YOUR_DB_PORT" # normally 3306
+# Google credentials in google.json
+
 
 import os
 import sys
@@ -32,9 +27,55 @@ import requests
 import time
 import jmespath
 from pathlib import Path
-# important - needs to run pip3 install python-mysql-connector
-import mysql.connector
 
+# Google doings
+import gspread  # pip install gspread
+# Setting up the authorization
+from google.oauth2.service_account import Credentials
+
+def convert_types(row):
+    def try_number(val):
+        try:
+            return int(val)
+        except ValueError:
+            try:
+                return float(val)
+            except ValueError:
+                return val
+    return [try_number(cell) for cell in row]
+
+
+class Spreadsheet:
+    def __init__(self, creds_file, spreadsheet_name, worksheet_name,latest_worksheet_name):
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
+        client = gspread.authorize(creds)
+        self.spreadsheet = client.open(spreadsheet_name)
+        self.worksheet = self.spreadsheet.worksheet(worksheet_name)
+        self.latest_worksheet = self.spreadsheet.worksheet(latest_worksheet_name)
+
+    def get_last_row(self,worksheet):
+        """Returns the last non-empty row as a list."""
+        values = worksheet.get_all_values()
+        if values:
+            return convert_types(values[-1])
+        return []
+
+    def append_row(self,worksheet, row_data):
+        """Appends a row to the worksheet."""
+        worksheet.append_row(row_data)
+
+
+    def replace_top_row(self, worksheet, new_row):
+        """
+        Replaces the first row of the worksheet with the values in new_row.
+        """
+        # Update the first row with new_row values
+        cell_range = f"A1:{gspread.utils.rowcol_to_a1(1, len(new_row))}"
+        worksheet.update(values=[new_row],range_name=cell_range)
 
 # Local time doings
 def localtime(inputTime):
@@ -120,15 +161,6 @@ def main():
                  "solisId" : os.environ.get('solisId'),
                  "solisSn" : os.environ.get('solisSn') }
 
-
-# Database credentials for the conkers
-    dbInfo = { "dbuser" : os.environ.get('dbUser'),
-               "dbpass" : os.environ.get('dbPass'),
-               "dbhost" : os.environ.get('dbHost'),
-               "dbname" : os.environ.get('dbName'),
-               "dbport" : os.environ.get('dbPort'),
-               "dbtable" : os.environ.get('dbTable') }
-
 # jmespath filter
     jmespathfilter="data.{ \
                     timestamp:dataTimestamp, \
@@ -144,33 +176,27 @@ def main():
 # Local file for the silly little display thingy
     latestFileName="/usr/local/www/html/solar/latest.json"
 
+# Initialize spreadsheet
+    sheet = Spreadsheet(
+        creds_file="google.json",
+        spreadsheet_name="Solar Database",
+        worksheet_name="solar5",
+        latest_worksheet_name="solar5_latest"
+    )
+
+# Then get the solis data yeah
     solar_usage=getSolis(solisInfo,jmespathfilter)
-    
 
 # Using timestamp as the success factor because why not
     
     if "timestamp" in solar_usage:
         print("solis timestamp is: "+solar_usage['timestamp'])
-    
-    # database bits
-    
-        try:
-            cnx = mysql.connector.connect(user=dbInfo['dbuser'], password=dbInfo['dbpass'],
-                                          host=dbInfo['dbhost'], port=dbInfo['dbport'],
-                                          database=dbInfo['dbname'], auth_plugin='mysql_native_password')
-        except Exception as e:
-            print ("DB select didn't work sorry because " + str(e))
         
-        table=dbInfo['dbtable']
-        
-        # Get the latest stuff
-        cursor = cnx.cursor()
-        sql="select year,month,day,hour,minute,powerUsed, gridIn, solarIn, batteryIn, batteryPer from solar5 order by updated_timstm desc limit 1;"
-        cursor.execute(sql)
-        data=cursor.fetchone()
-        cursor.close()
+        # Get the latest stuff from the latest_worksheet - complicated really
+        last_row=sheet.get_last_row(sheet.latest_worksheet)
+        print(f'last_row is {last_row}')
         solar_last={}
-        solar_last['year'],solar_last['month'],solar_last['day'],solar_last['hour'],solar_last['minute'],solar_last['powerUsed'], solar_last['gridIn'], solar_last['solarIn'], solar_last['batteryIn'], solar_last['batteryPer']=[data[i] for i in (range(len(data)))]
+        solar_last['year'],solar_last['month'],solar_last['day'],solar_last['hour'],solar_last['minute'],solar_last['powerUsed'], solar_last['gridIn'], solar_last['solarIn'], solar_last['batteryIn'], solar_last['batteryPer']=[last_row[i] for i in (range(10))]
         
         latest_timestamp=(f"{solar_last['year']:04d}{solar_last['month']:02d}{solar_last['day']:02d}{solar_last['hour']:02d}{solar_last['minute']:02d}")
         print("latest_timestamp is: "+latest_timestamp)
@@ -180,21 +206,17 @@ def main():
         if latest_timestamp != solar_usage['timestamp']:
             print("Thems is different so let's go")
 
+# Turn the data into a list
+            new_row_data=[]
+            keys=['year','month','day','hour','minute','powerUsed','gridIn','solarIn','batteryIn','batteryPer','solarInToday','gridInToday','gridOutToday']
+            for key in keys:
+                new_row_data.append(solar_usage[key])
+            new_row_data.append(localtime(time.time()))
+
 # Update the new stuff
-    
-            solar_db=solar_usage.copy()
-            del solar_db['timestamp']
-            placeholders = ', '.join(['%s'] * len(solar_db))
-            columns = ', '.join(solar_db.keys())
-            sql = "INSERT INTO %s ( %s ) VALUES ( %s )" % (table, columns, placeholders)
-            try:
-                cursor=cnx.cursor()
-                cursor.execute(sql, list(solar_db.values()))
-                cnx.commit()
-                cursor.close()
-                cnx.close()
-            except Exception as e:
-                print ("DB insert didn't work sorry because this: " + str(e))
+            sheet.append_row(sheet.worksheet,new_row_data)
+            sheet.replace_top_row(sheet.latest_worksheet,new_row_data)
+
             
     # Do the local file
             localFile(solar_usage,latestFileName)
