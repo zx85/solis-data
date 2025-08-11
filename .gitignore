@@ -1,4 +1,5 @@
 solis.env
+google.env
 getdata.log
 getday.log
 getdata-test.py
