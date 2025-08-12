@@ -17,8 +17,10 @@ from pathlib import Path
 # I think this is python-telegram-bot
 import telegram
 
-# important - needs to run pip3 install python-mysql-connector
-import mysql.connector
+# Google doings
+import gspread  # pip install gspread
+# Setting up the authorization
+from google.oauth2.service_account import Credentials
 
 import logging
 
@@ -30,6 +32,13 @@ handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+# Super necessary variable definitions
+current_path=os.path.dirname(os.path.abspath(__file__))
+creds_file=f'{current_path}/google.json'
+
+# text output file
+csv_filename_prefix = "/media/dave/james/data/solar/solarDay/solarDay_"
 
 
 # This needs the following environment variables to be created:
@@ -47,13 +56,46 @@ logger.addHandler(handler)
 # export telegramBotToken="YOUR_TELEGRAM_BOT_TOKEN"
 # export telegramChatId="YOUR_PERSONAL_CHAT_ID"
 
-# Database credentials
-# export dbUser="YOUR_DB_USER"
-# export dbPass="YOUR_DB_PASS"
-# export dbHost="YOUR_DB_HOST"
-# export dbName="YOUR_DB_NAME" # eg solar
-# export dbTable="YOUR_DB_TABLE" # if you use the schema in solarday.sql it will be solarDay
-# export dbPort="YOUR_DB_PORT" # normally 3306
+def convert_types(row):
+  def try_number(val):
+    try:
+      return int(val)
+    except ValueError:
+      try:
+        return float(val)
+      except ValueError:
+        return val
+  return [try_number(cell) for cell in row]
+
+class Spreadsheet:
+  def __init__(self, creds_file, spreadsheet_name, worksheet_name,latest_worksheet_name):
+    scopes = [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive"
+    ]
+    creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
+    client = gspread.authorize(creds)
+    self.spreadsheet = client.open(spreadsheet_name)
+    self.worksheet = self.spreadsheet.worksheet(worksheet_name)
+
+  def get_last_row(self,worksheet):
+    """Returns the last non-empty row as a list."""
+    values = worksheet.get_all_values()
+    if values:
+      return convert_types(values[-1])
+    return []
+
+  def append_row(self,worksheet, row_data):
+    """Appends a row to the worksheet."""
+    worksheet.append_row(row_data)
+
+  def replace_top_row(self, worksheet, new_row):
+    """
+    Replaces the first row of the worksheet with the values in new_row.
+    """
+    # Update the first row with new_row values
+    cell_range = f"A1:{gspread.utils.rowcol_to_a1(1, len(new_row))}"
+    worksheet.update(values=[new_row],range_name=cell_range)
 
 
 # Push message doings
@@ -220,81 +262,16 @@ def send_telegram_message(bot, mychatid, date_query, solar_usage):
     logger.debug(f"End of send_telegram_message")
 
 
-def update_solarDay_database(dbInfo, date_query, solar_usage):
+def update_solarDay_database(date_query, solar_usage):
     logger.info(f"running update_solarDay_database function for {date_query}")
     if solar_usage:
         new_data = False
-        db_ready = False
+
         # Timestamp swappage for database funtimes
         solar_usage["year"] = int(date_query.split("-")[0])
         solar_usage["month"] = int(date_query.split("-")[1])
         solar_usage["day"] = int(date_query.split("-")[2])
 
-        logger.debug(
-            f"making the DB connection to {dbInfo['dbname']} on {dbInfo['dbhost']}"
-        )
-        # And now we database the data
-        try:
-            cnx = mysql.connector.connect(
-                user=dbInfo["dbuser"],
-                password=dbInfo["dbpass"],
-                host=dbInfo["dbhost"],
-                port=dbInfo["dbport"],
-                database=dbInfo["dbname"],
-                auth_plugin="mysql_native_password",
-            )
-            db_ready = True
-        except Exception as e:
-            logger.error(
-                f"Connecting to the database didn't work sorry. Because this: {str(e)}"
-            )
-        if db_ready:
-            table = dbInfo["dbtable"]
-
-            # Check to see if there's data there already - avoid duplicating messages
-        if db_ready:
-            # check to see if there's already data
-            logger.debug(f"Checking to see if there's already data for {date_query}")
-
-            sql = (
-                "select count(totalConsumed) as `QTY` from %s where year= %s and month = %s and day = %s"
-                % (
-                    table,
-                    int(date_query[:4]),
-                    int(date_query[5:7]),
-                    int(date_query[8:10]),
-                )
-            )
-            cursor = cnx.cursor()
-            try:
-                cursor.execute(sql)
-                for (QTY,) in cursor:
-                    if int(QTY) == 0:
-                        new_data = True
-            except Exception as e:
-                logger.error(
-                    f"current data select query didn't work sorry because {str(e)}"
-                )
-            cursor.close()
-
-            # do the DB bit
-            logger.debug(f"Building the REPLACE INTO query for {date_query}")
-            placeholders = ", ".join(["%s"] * len(solar_usage))
-            columns = ", ".join(solar_usage.keys())
-            sql = "REPLACE INTO %s ( %s ) VALUES ( %s )" % (
-                table,
-                columns,
-                placeholders,
-            )
-            logger.debug(f"running the REPLACE INTO sql on {dbInfo['dbtable']}")
-            try:
-                cursor = cnx.cursor()
-                cursor.execute(sql, list(solar_usage.values()))
-                cnx.commit()
-                cursor.close()
-                cnx.close()
-            except Exception as e:
-                logger.error(f"The REPLACE INTO didn't work. Here's why: {str(e)}")
     else:
         logger.debug(
             "No solar_usage data - skipping to the end of update_solarDay_database"
@@ -319,18 +296,14 @@ def main():
     bot = telegram.Bot(token=os.environ.get("telegramBotToken"))
     mychatid = os.environ.get("telegramChatId")
 
-    # Database credentials for the conkers
-    dbInfo = {
-        "dbuser": os.environ.get("dbUser"),
-        "dbpass": os.environ.get("dbPass"),
-        "dbhost": os.environ.get("dbHost"),
-        "dbname": os.environ.get("dbName"),
-        "dbport": os.environ.get("dbPort"),
-        "dbtable": os.environ.get("dbDayTable"),
-    }
+    # Google Sheets goodies
+# Initialize spreadsheet
+    sheet = Spreadsheet(
+        creds_file=creds_file,
+        spreadsheet_name="Solar Database",
+        worksheet_name="solarDay",
+    )
 
-    # text output file
-    csv_filename_prefix = "/media/dave/james/data/solar-"
 
     if len(sys.argv) < 2:
         print("Usage: getday.py yyyy-mm-dd")
@@ -342,7 +315,7 @@ def main():
     solar_usage = get_solis_data(solisInfo, date_query)
 
     # update the database
-    new_data = update_solarDay_database(dbInfo, date_query, solar_usage)
+    new_data = update_solarDay_database(sheet, date_query, solar_usage)
 
     if new_data:
         logger.debug("New data - so update the csv and send the telegram message")
