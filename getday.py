@@ -25,13 +25,13 @@ from google.oauth2.service_account import Credentials
 import logging
 
 # Create a logger
-logger = logging.getLogger("")
-logger.setLevel(logging.DEBUG)
+log = logging.getLogger("")
+log.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
-logger.addHandler(handler)
+log.addHandler(handler)
 
 # Super necessary variable definitions
 current_path=os.path.dirname(os.path.abspath(__file__))
@@ -68,7 +68,7 @@ def convert_types(row):
   return [try_number(cell) for cell in row]
 
 class Spreadsheet:
-  def __init__(self, creds_file, spreadsheet_name, worksheet_name,latest_worksheet_name):
+  def __init__(self, creds_file, spreadsheet_name, worksheet_name):
     scopes = [
       "https://www.googleapis.com/auth/spreadsheets",
       "https://www.googleapis.com/auth/drive"
@@ -85,43 +85,61 @@ class Spreadsheet:
       return convert_types(values[-1])
     return []
 
-  def append_row(self,worksheet, row_data):
-    """Appends a row to the worksheet."""
-    worksheet.append_row(row_data)
-
-  def replace_top_row(self, worksheet, new_row):
+def check_values_in_columns(sheet, target_values):
     """
-    Replaces the first row of the worksheet with the values in new_row.
-    """
-    # Update the first row with new_row values
-    cell_range = f"A1:{gspread.utils.rowcol_to_a1(1, len(new_row))}"
-    worksheet.update(values=[new_row],range_name=cell_range)
+    Check if all three values match in columns A, B, and C of a Google Sheet.
 
+    Args:
+        sheet: gspread worksheet object
+        target_values: 
+            - a list of values to match (from leftmost column)
+    Returns:
+        bool: True if all three columns match, False otherwise
+    """
+
+    found=False
+    # Get all values from columns A, B, and C
+    try:
+        # Get the range A:C (all rows in columns A, B, C)
+        range_data = sheet.get('A:C')
+
+        log.debug('Checking each row')    
+        for row in range_data:
+            converted_row=convert_types(row)[:len(target_values)]
+            if converted_row==target_values:
+                log.info('Found a matching row')
+                found=True
+           
+    except Exception as e:
+        log.error(f"Error accessing sheet: {e}")
+        return True
+
+    return found
 
 # Push message doings
 def sendmessage(bot, chat_id, thisMessage):
-    logger.debug(f"in sendmessage function - chat_id is {chat_id}")
+    log.debug(f"in sendmessage function - chat_id is {chat_id}")
     bot.send_message(chat_id=chat_id, text=thisMessage)
 
 
 def localtime(inputTime):
-    logger.debug(f"in localtime function - inputTime is {inputTime}")
-    return time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime(inputTime))
+    log.debug(f"in localtime function - inputTime is {inputTime}")
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(inputTime))
 
 
 # Local time doings
 def utc_calc(time_string, day_diff=0):
-    logger.debug(f"in utc_calc - time_string is {time_string} - day_diff is {day_diff}")
+    log.debug(f"in utc_calc - time_string is {time_string} - day_diff is {day_diff}")
     local = pytz.timezone("Europe/London")
     naive = datetime.strptime(time_string, "%Y-%m-%d")
     local_dt = local.localize(naive, is_dst=None)
     utc_dt = local_dt.astimezone(pytz.utc) + timedelta(days=day_diff)
-    logger.debug(f"End of utc_calc")
+    log.debug(f"End of utc_calc")
     return utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def get_solis_data(solisInfo, date_query):
-    logger.info(f"running get_solis_data function for {date_query}")
+    log.info(f"running get_solis_data function for {date_query}")
     # jmespath filter
     jmespathfilter = "data.records[0].{totalConsumed:consumeEnergy, solarGen:energy, solarExport:gridSellEnergy, batCharge:batteryChargeEnergy, selfUse:oneSelf, gridImport:gridPurchasedEnergy, batUse:batteryDischargeEnergy}"
     solar_usage = {}
@@ -192,36 +210,36 @@ def get_solis_data(solisInfo, date_query):
     status_code = 0
     retry_count = 0
     while status_code != 200 and retry_count < 10:
-        logger.debug(f"into the request loop - retry count is {retry_count}")
+        log.debug(f"into the request loop - retry count is {retry_count}")
         try:
             resp = Session.post(req, data=Body, headers=header, timeout=60)
             status_code = resp.status_code
-            logger.info(f"Response status code: {str(status_code)}")
-            logger.debug("\nHere is the resultant solis doings")
-            logger.debug(json.dumps(resp.json()))
-            logger.debug("\n##################################\n")
+            log.info(f"Response status code: {str(status_code)}")
+            log.debug("\nHere is the resultant solis doings")
+            log.debug(json.dumps(resp.json()))
+            log.debug("\n##################################\n")
             solar_usage = jmespath.search(jmespathfilter, resp.json())
         except Exception as e:
-            logger.error(f"getting the API didn't work sorry - here's why: {str(e)}")
+            log.error(f"getting the API didn't work sorry - here's why: {str(e)}")
         if status_code != 200:
             retry_count = retry_count + 1
             time.sleep(10)
-            logger.info("Retrying for attempt " + str(retry_count))
-    logger.debug(f"End of get_solis_data")
+            log.info("Retrying for attempt " + str(retry_count))
+    log.debug(f"End of get_solis_data")
     return solar_usage
 
 
 def write_csv_file(csv_filename_prefix, date_query, solar_usage):
     if solar_usage:
-        logger.info(f"running write_csv_file function for {date_query}")
+        log.info(f"running write_csv_file function for {date_query}")
         outstring = ""
         csv_filename = csv_filename_prefix + date_query[0:7] + ".csv"
-        logger.info(f"preparing to write {csv_filename} file")
+        log.info(f"preparing to write {csv_filename} file")
 
         # Do something if the file doesn't exist
         if not Path(csv_filename).exists():
             filemode = "wt"
-            logger.warning("No file found - creating one")
+            log.warning("No file found - creating one")
             outstring = "date,"
             for key, value in solar_usage.items():
                 outstring = outstring + key + ","
@@ -237,12 +255,12 @@ def write_csv_file(csv_filename_prefix, date_query, solar_usage):
         csv_file.write(outstring)
         csv_file.close()
     else:
-        logger.debug("No solar_usage data - skipping to the end of write_csv_file")
-    logger.debug(f"End of write_csv_file")
+        log.debug("No solar_usage data - skipping to the end of write_csv_file")
+    log.debug(f"End of write_csv_file")
 
 
 def send_telegram_message(bot, mychatid, date_query, solar_usage):
-    logger.info(f"running send_telegram_message for {date_query}")
+    log.info(f"running send_telegram_message for {date_query}")
     if solar_usage:
         outstring = "Data for " + date_query + ":\n"
         for key, value in solar_usage.items():
@@ -254,30 +272,47 @@ def send_telegram_message(bot, mychatid, date_query, solar_usage):
         try:
             sendmessage(bot, mychatid, outstring)
         except Exception as e:
-            logger.error("Telegram failed. Sad. Here's why: " + str(e))
+            log.error("Telegram failed. Sad. Here's why: " + str(e))
     else:
-        logger.debug(
+        log.debug(
             "No solar_usage data - skipping to the end of send_telegram_message"
         )
-    logger.debug(f"End of send_telegram_message")
+    log.debug(f"End of send_telegram_message")
 
 
-def update_solarDay_database(date_query, solar_usage):
-    logger.info(f"running update_solarDay_database function for {date_query}")
+def update_solarDay_database(sheet,date_query, solar_usage):
+    new_data = False
+    log.info(f"running update_solarDay_database function for {date_query}")
     if solar_usage:
-        new_data = False
-
         # Timestamp swappage for database funtimes
         solar_usage["year"] = int(date_query.split("-")[0])
         solar_usage["month"] = int(date_query.split("-")[1])
         solar_usage["day"] = int(date_query.split("-")[2])
-
+        sheet_query=[solar_usage["year"],solar_usage["month"],solar_usage["day"]]
+        # Check to see if there's an entry already
+        if not (check_values_in_columns(sheet.worksheet,sheet_query)):
+            log.info('Need to add this one yeah')
+            new_data = True
+            field_list=["year",
+                        "month",
+                        "day",
+                        "totalConsumed",
+                        "solarGen",
+                        "solarExport",
+                        "batCharge",
+                        "selfUse",
+                        "gridImport",
+                        "batUse"]
+            new_row_data=[]
+            for field in field_list:
+                new_row_data.append(solar_usage[field])
+            new_row_data.append(localtime(time.time()))
+            sheet.worksheet.append_row(new_row_data)
     else:
-        logger.debug(
+        log.debug(
             "No solar_usage data - skipping to the end of update_solarDay_database"
         )
-
-    logger.debug(f"End of update_solarDay_database")
+    log.debug(f"End of update_solarDay_database")
     return new_data
 
 
@@ -315,17 +350,15 @@ def main():
     solar_usage = get_solis_data(solisInfo, date_query)
 
     # update the database
-    new_data = update_solarDay_database(sheet, date_query, solar_usage)
-
-    if new_data:
-        logger.debug("New data - so update the csv and send the telegram message")
+    if new_data:= update_solarDay_database(sheet, date_query, solar_usage):
+        log.debug("New data - so update the csv and send the telegram message")
         # Send the message
         send_telegram_message(bot, mychatid, date_query, solar_usage)
 
         # write the csv file
         write_csv_file(csv_filename_prefix, date_query, solar_usage)
     else:
-        logger.debug(
+        log.debug(
             "Data already in the DB - no need to update the csv and send the telegram message"
         )
 

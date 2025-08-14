@@ -74,11 +74,6 @@ class Spreadsheet:
       return convert_types(values[-1])
     return []
 
-  def append_row(self,worksheet, row_data):
-    """Appends a row to the worksheet."""
-    worksheet.append_row(row_data)
-
-
   def replace_top_row(self, worksheet, new_row):
     """
     Replaces the first row of the worksheet with the values in new_row.
@@ -284,7 +279,7 @@ def main():
       new_row_data.append(localtime(time.time()))
 
 # Update the new stuff
-      sheet.append_row(sheet.worksheet,new_row_data)
+      sheet.worksheet.append_row(new_row_data)
       sheet.format_and_fix_numbers(sheet.worksheet)
 
   # Append to the solar csv file
