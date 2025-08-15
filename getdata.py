@@ -16,8 +16,7 @@
 import os
 import json
 from calendar import monthrange
-import hashlib
-from hashlib import sha1
+from hashlib import sha1,md5
 import hmac
 import base64
 from datetime import datetime
@@ -40,21 +39,9 @@ solar_csv_file=f'/media/solar/solar5/solar5_{datetime.now().strftime("%Y-%m-%d")
 
 current_path=os.path.dirname(os.path.abspath(__file__))
 
-def convert_types(row):
-  def try_number(val):
-    try:
-      return int(val)
-    except ValueError:
-      try:
-        return float(val)
-      except ValueError:
-        return val
-  return [try_number(cell) for cell in row]
- 
 # Local time doings
 def localtime(inputTime):
     return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(inputTime))
-
 
 def getSolis(solisInfo,jmespathfilter):
   solar_usage={}
@@ -72,21 +59,11 @@ def getSolis(solisInfo,jmespathfilter):
   
   # Here's the bit where we get data from Solis
   Body = '{"pageSize":100,  "id": "'+solisInfo['solisId']+'", "sn": "'+solisInfo['solisSn']+'" }'
-  Content_MD5 = base64.b64encode(hashlib.md5(Body.encode('utf-8')).digest()).decode('utf-8')
-  encryptStr = (VERB + "\n"
-    + Content_MD5 + "\n"
-    + Content_Type + "\n"
-    + Date + "\n"
-    + CanonicalizedResource)
-  h = hmac.new(solisInfo['solisSecret'], msg=encryptStr.encode('utf-8'), digestmod=hashlib.sha1)
+  Content_MD5 = base64.b64encode(md5(Body.encode('utf-8')).digest()).decode('utf-8')
+  encryptStr = (f"{VERB}\n{Content_MD5}\n{Content_Type}\n{Date}\n{CanonicalizedResource}")
+  h = hmac.new(solisInfo['solisSecret'], msg=encryptStr.encode('utf-8'), digestmod=sha1)
   Sign = base64.b64encode(h.digest())
   Authorization = "API " + solisInfo['solisKey'] + ":" + Sign.decode('utf-8')
-  requestStr = (VERB + " " + CanonicalizedResource + "\n"
-    + "Content-MD5: " + Content_MD5 + "\n"
-    + "Content-Type: " + Content_Type + "\n"
-    + "Date: " + Date + "\n"
-    + "Authorization: "+ Authorization + "\n"
-    + "Body: " + Body)
   header = { "Content-MD5":Content_MD5,
         "Content-Type":Content_Type,
         "Date":Date,

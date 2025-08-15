@@ -3,8 +3,7 @@ import os
 import sys
 import json
 from calendar import monthrange
-import hashlib
-from hashlib import sha1
+from hashlib import sha1,md5
 import hmac
 import base64
 from datetime import datetime, timezone, timedelta
@@ -83,30 +82,19 @@ def get_solis_data(solisInfo, date_query):
     now = datetime.now(timezone.utc)
     Date = now.strftime("%a, %d %b %Y %H:%M:%S GMT")
     Body = (
-        '{"time":"'
-        + date_query
-        + '", "pageSize":100, "sn":"'
-        + solisInfo["solisSn"]
-        + '", "id":"'
-        + solisInfo["solisId"]
-        + '"}'
+        f'{{'
+        f'"time":"{date_query}", '
+        f'"pageSize":100, '
+        f'"sn":"{solisInfo["solisSn"]}", '
+        f'"id":"{solisInfo["solisId"]}"'
+        f'}}'
     )
-    Content_MD5 = base64.b64encode(hashlib.md5(Body.encode("utf-8")).digest()).decode(
+    Content_MD5 = base64.b64encode(md5(Body.encode("utf-8")).digest()).decode(
         "utf-8"
     )
-    encryptStr = (
-        VERB
-        + "\n"
-        + Content_MD5
-        + "\n"
-        + Content_Type
-        + "\n"
-        + Date
-        + "\n"
-        + CanonicalizedResource
-    )
+    encryptStr = f"{VERB}\n{Content_MD5}\n{Content_Type}\n{Date}\n{CanonicalizedResource}"
     h = hmac.new(
-        solisInfo["solisSecret"], msg=encryptStr.encode("utf-8"), digestmod=hashlib.sha1
+        solisInfo["solisSecret"], msg=encryptStr.encode("utf-8"), digestmod=sha1
     )
     Sign = base64.b64encode(h.digest())
     Authorization = "API " + solisInfo["solisKey"] + ":" + Sign.decode("utf-8")
