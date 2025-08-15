@@ -18,20 +18,10 @@ from pathlib import Path
 import telegram
 
 # Google doings
-import gspread  # pip install gspread
-# Setting up the authorization
-from google.oauth2.service_account import Credentials
-
-import logging
-
-# Create a logger
-log = logging.getLogger("")
-log.setLevel(logging.DEBUG)
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-handler.setFormatter(formatter)
-log.addHandler(handler)
+from include.googlesheets import Spreadsheet
+ 
+# logging
+from include.logger import log
 
 # Super necessary variable definitions
 current_path=os.path.dirname(os.path.abspath(__file__))
@@ -55,66 +45,6 @@ csv_filename_prefix = "/media/dave/james/data/solar/solarDay/solarDay_"
 # Telegram goodness
 # export telegramBotToken="YOUR_TELEGRAM_BOT_TOKEN"
 # export telegramChatId="YOUR_PERSONAL_CHAT_ID"
-
-def convert_types(row):
-  def try_number(val):
-    try:
-      return int(val)
-    except ValueError:
-      try:
-        return float(val)
-      except ValueError:
-        return val
-  return [try_number(cell) for cell in row]
-
-class Spreadsheet:
-  def __init__(self, creds_file, spreadsheet_name, worksheet_name):
-    scopes = [
-      "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive"
-    ]
-    creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
-    client = gspread.authorize(creds)
-    self.spreadsheet = client.open(spreadsheet_name)
-    self.worksheet = self.spreadsheet.worksheet(worksheet_name)
-
-  def get_last_row(self,worksheet):
-    """Returns the last non-empty row as a list."""
-    values = worksheet.get_all_values()
-    if values:
-      return convert_types(values[-1])
-    return []
-
-def check_values_in_columns(sheet, target_values):
-    """
-    Check if all three values match in columns A, B, and C of a Google Sheet.
-
-    Args:
-        sheet: gspread worksheet object
-        target_values: 
-            - a list of values to match (from leftmost column)
-    Returns:
-        bool: True if all three columns match, False otherwise
-    """
-
-    found=False
-    # Get all values from columns A, B, and C
-    try:
-        # Get the range A:C (all rows in columns A, B, C)
-        range_data = sheet.get('A:C')
-
-        log.debug('Checking each row')    
-        for row in range_data:
-            converted_row=convert_types(row)[:len(target_values)]
-            if converted_row==target_values:
-                log.info('Found a matching row')
-                found=True
-           
-    except Exception as e:
-        log.error(f"Error accessing sheet: {e}")
-        return True
-
-    return found
 
 # Push message doings
 def sendmessage(bot, chat_id, thisMessage):
@@ -290,7 +220,7 @@ def update_solarDay_database(sheet,date_query, solar_usage):
         solar_usage["day"] = int(date_query.split("-")[2])
         sheet_query=[solar_usage["year"],solar_usage["month"],solar_usage["day"]]
         # Check to see if there's an entry already
-        if not (check_values_in_columns(sheet.worksheet,sheet_query)):
+        if not (sheet.check_values_in_columns(sheet_query)):
             log.info('Need to add this one yeah')
             new_data = True
             field_list=["year",
@@ -308,6 +238,9 @@ def update_solarDay_database(sheet,date_query, solar_usage):
                 new_row_data.append(solar_usage[field])
             new_row_data.append(localtime(time.time()))
             sheet.worksheet.append_row(new_row_data)
+            # Then copy the formula from the previous rows
+            copy_cols=['L','M']
+            sheet.copy_formulas_for_columns(copy_cols)
     else:
         log.debug(
             "No solar_usage data - skipping to the end of update_solarDay_database"
@@ -350,7 +283,7 @@ def main():
     solar_usage = get_solis_data(solisInfo, date_query)
 
     # update the database
-    if new_data:= update_solarDay_database(sheet, date_query, solar_usage):
+    if update_solarDay_database(sheet, date_query, solar_usage):
         log.debug("New data - so update the csv and send the telegram message")
         # Send the message
         send_telegram_message(bot, mychatid, date_query, solar_usage)

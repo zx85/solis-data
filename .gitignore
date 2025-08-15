@@ -3,3 +3,4 @@ google.json
 getdata.log
 getday.log
 getdata-test.py
+__pycache__
