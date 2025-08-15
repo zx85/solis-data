@@ -2,8 +2,12 @@
 import gspread  # pip install gspread
 # Setting up the authorization
 from google.oauth2.service_account import Credentials
+from gspread_formatting import cellFormat, numberFormat, format_cell_range
+from datetime import datetime
+import time
 import sys
 import re
+
 
 from include.logger import log
 
@@ -30,6 +34,68 @@ class Spreadsheet:
           return val
     return [try_number(cell) for cell in row]
 
+
+  def format_and_fix_numbers(self,worksheet):
+    def datetime_to_serial(dt):
+      """Convert Python datetime to Google Sheets serial number."""
+      epoch = datetime(1899, 12, 30)
+      delta = dt - epoch
+      return delta.days + (delta.seconds / 86400)
+
+    """
+    Converts text numbers to actual numbers and applies column formats.
+    """
+    # Desired formats for each column range
+    column_formats = {
+        'A:E': numberFormat(type='NUMBER', pattern='0'),
+        'F:I': numberFormat(type='NUMBER', pattern='0.000'),
+        'J:J': numberFormat(type='NUMBER', pattern='0'),
+        'K:K': numberFormat(type='NUMBER', pattern='0.0'),
+        'L:M': numberFormat(type='NUMBER', pattern='0.00'),
+        'N:N': numberFormat(type='DATE_TIME', pattern='yyyy-mm-dd hh:mm:ss')
+    }
+
+    # 1️⃣ Convert all "number-like" strings into actual numbers
+    # Fetch all values as a list of lists
+    data = worksheet.get_all_values()
+
+    # Convert cells that are numeric strings into numbers
+    cleaned_data = []
+    for row in data:
+        new_row = []
+        for value in row:
+        # Try datetime first
+          try:
+            dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+            new_row.append(datetime_to_serial(dt))
+            continue
+          except ValueError:
+            pass
+          try:
+            num = float(value)
+            # Keep as int if whole number
+            if num.is_integer():
+              new_row.append(int(num))
+            else:
+              new_row.append(num)
+            continue
+          except ValueError:
+            pass
+
+          new_row.append(value)  # leave as-is
+        cleaned_data.append(new_row)
+
+    # Update the entire sheet with cleaned values
+    if cleaned_data:
+        worksheet.update(cleaned_data)
+
+    # 2️⃣ Apply number formats to the specified ranges
+    for col_range, num_format in column_formats.items():
+        format_cell_range(
+            worksheet,
+            col_range,
+            cellFormat(numberFormat=num_format)
+        )
 
   def get_last_row(self,worksheet):
     """Returns the last non-empty row as a list."""

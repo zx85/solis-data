@@ -14,7 +14,6 @@
 
 
 import os
-import sys
 import json
 from calendar import monthrange
 import hashlib
@@ -29,10 +28,7 @@ import jmespath
 from pathlib import Path
 
 # Google doings
-import gspread  # pip install gspread
-from gspread_formatting import cellFormat, numberFormat, format_cell_range
-# Setting up the authorization
-from google.oauth2.service_account import Credentials
+from include.googlesheets import Spreadsheet
 
 # Main variables doings 
 #######################
@@ -54,96 +50,6 @@ def convert_types(row):
       except ValueError:
         return val
   return [try_number(cell) for cell in row]
-
-
-class Spreadsheet:
-  def __init__(self, creds_file, spreadsheet_name, worksheet_name):
-    scopes = [
-      "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive"
-    ]
-    creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
-    client = gspread.authorize(creds)
-    self.spreadsheet = client.open(spreadsheet_name)
-    self.worksheet = self.spreadsheet.worksheet(worksheet_name)
-
-  def get_last_row(self,worksheet):
-    """Returns the last non-empty row as a list."""
-    values = worksheet.get_all_values()
-    if values:
-      return convert_types(values[-1])
-    return []
-
-  def replace_top_row(self, worksheet, new_row):
-    """
-    Replaces the first row of the worksheet with the values in new_row.
-    """
-    # Update the first row with new_row values
-    cell_range = f"A1:{gspread.utils.rowcol_to_a1(1, len(new_row))}"
-    worksheet.update(values=[new_row],range_name=cell_range)
-
-
-  def format_and_fix_numbers(self,worksheet):
-    def datetime_to_serial(dt):
-      """Convert Python datetime to Google Sheets serial number."""
-      epoch = datetime(1899, 12, 30)
-      delta = dt - epoch
-      return delta.days + (delta.seconds / 86400)
-
-    """
-    Converts text numbers to actual numbers and applies column formats.
-    """
-    # Desired formats for each column range
-    column_formats = {
-        'A:E': numberFormat(type='NUMBER', pattern='0'),
-        'F:I': numberFormat(type='NUMBER', pattern='0.000'),
-        'J:J': numberFormat(type='NUMBER', pattern='0'),
-        'K:K': numberFormat(type='NUMBER', pattern='0.0'),
-        'L:M': numberFormat(type='NUMBER', pattern='0.00'),
-        'N:N': numberFormat(type='DATE_TIME', pattern='yyyy-mm-dd hh:mm:ss')
-    }
-
-    # 1️⃣ Convert all "number-like" strings into actual numbers
-    # Fetch all values as a list of lists
-    data = worksheet.get_all_values()
-
-    # Convert cells that are numeric strings into numbers
-    cleaned_data = []
-    for row in data:
-        new_row = []
-        for value in row:
-        # Try datetime first
-          try:
-            dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-            new_row.append(datetime_to_serial(dt))
-            continue
-          except ValueError:
-            pass
-          try:
-            num = float(value)
-            # Keep as int if whole number
-            if num.is_integer():
-              new_row.append(int(num))
-            else:
-              new_row.append(num)
-            continue
-          except ValueError:
-            pass
-
-          new_row.append(value)  # leave as-is
-        cleaned_data.append(new_row)
-
-    # Update the entire sheet with cleaned values
-    if cleaned_data:
-        worksheet.update(cleaned_data)
-
-    # 2️⃣ Apply number formats to the specified ranges
-    for col_range, num_format in column_formats.items():
-        format_cell_range(
-            worksheet,
-            col_range,
-            cellFormat(numberFormat=num_format)
-        )
  
 # Local time doings
 def localtime(inputTime):
