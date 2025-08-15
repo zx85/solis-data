@@ -98,26 +98,6 @@ def get_solis_data(solisInfo, date_query):
     )
     Sign = base64.b64encode(h.digest())
     Authorization = "API " + solisInfo["solisKey"] + ":" + Sign.decode("utf-8")
-    requestStr = (
-        VERB
-        + " "
-        + CanonicalizedResource
-        + "\n"
-        + "Content-MD5: "
-        + Content_MD5
-        + "\n"
-        + "Content-Type: "
-        + Content_Type
-        + "\n"
-        + "Date: "
-        + Date
-        + "\n"
-        + "Authorization: "
-        + Authorization
-        + "\n"
-        + "Body："
-        + Body
-    )
     header = {
         "Content-MD5": Content_MD5,
         "Content-Type": Content_Type,
