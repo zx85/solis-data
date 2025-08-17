@@ -35,7 +35,7 @@ class Spreadsheet:
     return [try_number(cell) for cell in row]
 
 
-  def format_and_fix_numbers(self,worksheet):
+  def format_and_fix_numbers(self,worksheet,column_formats):
     def datetime_to_serial(dt):
       """Convert Python datetime to Google Sheets serial number."""
       epoch = datetime(1899, 12, 30)
@@ -46,14 +46,6 @@ class Spreadsheet:
     Converts text numbers to actual numbers and applies column formats.
     """
     # Desired formats for each column range
-    column_formats = {
-        'A:E': numberFormat(type='NUMBER', pattern='0'),
-        'F:I': numberFormat(type='NUMBER', pattern='0.000'),
-        'J:J': numberFormat(type='NUMBER', pattern='0'),
-        'K:K': numberFormat(type='NUMBER', pattern='0.0'),
-        'L:M': numberFormat(type='NUMBER', pattern='0.00'),
-        'N:N': numberFormat(type='DATE_TIME', pattern='yyyy-mm-dd hh:mm:ss')
-    }
 
     # 1️⃣ Convert all "number-like" strings into actual numbers
     # Fetch all values as a list of lists

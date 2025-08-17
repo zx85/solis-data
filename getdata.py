@@ -25,6 +25,8 @@ import requests
 import time
 import jmespath
 from pathlib import Path
+from gspread_formatting import numberFormat
+
 
 # Google doings
 from include.googlesheets import Spreadsheet
@@ -156,14 +158,26 @@ def main():
 
 # Turn the data into a list
       new_row_data=[]
-      keys=['year','month','day','hour','minute','powerUsed','gridIn','solarIn','batteryIn','batteryPer','solarInToday','gridInToday','gridOutToday']
+      # solar_usage['datetime_string']=f"{solar_usage['year']:04d}-{solar_usage['month']:02d}-{solar_usage['day']:02d} {solar_usage['hour']:02d}{solar_usage['minute']:02d}"
+      solar_usage['datetime_string']=f"{solar_usage['year']}-{solar_usage['month']}-{solar_usage['day']} {solar_usage['hour']}:{solar_usage['minute']}:00"
+      keys=['year','month','day','hour','minute','datetime_string','powerUsed','gridIn','solarIn','batteryIn','batteryPer','solarInToday','gridInToday','gridOutToday']
       for key in keys:
         new_row_data.append(solar_usage[key])
       new_row_data.append(localtime(time.time()))
 
 # Update the new stuff
       sheet.worksheet.append_row(new_row_data)
-      sheet.format_and_fix_numbers(sheet.worksheet)
+
+      column_formats = {
+          'A:E': numberFormat(type='NUMBER', pattern='0'),
+          'F:F': numberFormat(type='DATE_TIME', pattern='yyyy-mm-dd hh:mm'),
+          'G:J': numberFormat(type='NUMBER', pattern='0.000'),
+          'K:K': numberFormat(type='NUMBER', pattern='0'),
+          'L:L': numberFormat(type='NUMBER', pattern='0.0'),
+          'M:N': numberFormat(type='NUMBER', pattern='0.00'),
+          'O:O': numberFormat(type='DATE_TIME', pattern='yyyy-mm-dd hh:mm:ss')
+      }
+      sheet.format_and_fix_numbers(sheet.worksheet,column_formats)
 
   # Append to the solar csv file
       if not os.path.exists(solar_csv_file):

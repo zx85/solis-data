@@ -12,6 +12,7 @@ import pytz
 import requests
 import jmespath
 from pathlib import Path
+from gspread_formatting import numberFormat
 
 # I think this is python-telegram-bot
 import telegram
@@ -191,9 +192,11 @@ def update_solarDay_database(sheet,date_query, solar_usage):
         if not (sheet.check_values_in_columns(sheet_query)):
             log.info('Need to add this one yeah')
             new_data = True
+            solar_usage["date_string"]=date_query
             field_list=["year",
                         "month",
                         "day",
+                        "date_string",
                         "totalConsumed",
                         "solarGen",
                         "solarExport",
@@ -207,8 +210,21 @@ def update_solarDay_database(sheet,date_query, solar_usage):
             new_row_data.append(localtime(time.time()))
             sheet.worksheet.append_row(new_row_data)
             # Then copy the formula from the previous rows
-            copy_cols=['L','M']
+            copy_cols=['M','N','O']
             sheet.copy_formulas_for_columns(copy_cols)
+            # This breaks the formulas - don't do it.
+            # column_formats = {
+            #     'A:C': numberFormat(type='NUMBER', pattern='0'),
+            #     'D': numberFormat(type='DATE_TIME', pattern='yyyy-mm-dd'),
+            #     'E:G': numberFormat(type='NUMBER', pattern='0.00'),
+            #     'H': numberFormat(type='NUMBER', pattern='0'),
+            #     'I:J': numberFormat(type='NUMBER', pattern='0.00'),
+            #     'K': numberFormat(type='NUMBER', pattern='0'),
+            #     'L': numberFormat(type='DATE_TIME', pattern='yyyy-mm-dd hh:mm:ss'),
+            #     'M': numberFormat(type='NUMBER', pattern='0.00'),
+            #     'O': numberFormat(type='NUMBER', pattern='0.0')
+            # }
+            # sheet.format_and_fix_numbers(sheet.worksheet,column_formats)
     else:
         log.debug(
             "No solar_usage data - skipping to the end of update_solarDay_database"
