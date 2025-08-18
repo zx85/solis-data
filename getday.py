@@ -25,7 +25,7 @@ from include.logger import log
 
 # Super necessary variable definitions
 current_path=os.path.dirname(os.path.abspath(__file__))
-creds_file=f'{current_path}/google.json'
+creds_file=f'{current_path}/../google.json'
 
 # text output file
 csv_filename_prefix = "/media/dave/james/data/solar/solarDay/solarDay_"

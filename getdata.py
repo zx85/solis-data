@@ -129,7 +129,7 @@ def main():
 
 # Initialize spreadsheet
   sheet = Spreadsheet(
-    creds_file=f"{current_path}/google.json",
+    creds_file=f"{current_path}/../google.json",
     spreadsheet_name="Solar Database",
     worksheet_name="solar5",
   )
