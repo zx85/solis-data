@@ -18,7 +18,7 @@ from gspread_formatting import numberFormat
 import telegram
 
 # Google doings
-from include.googlesheets import Spreadsheet
+from include.google_sheets import Spreadsheet
  
 # logging
 from include.logger import log
