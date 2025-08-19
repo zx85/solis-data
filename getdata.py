@@ -29,17 +29,21 @@ from gspread_formatting import numberFormat
 
 
 # Google doings
-from include.googlesheets import Spreadsheet
+from include.google_sheets import Spreadsheet
 
 # Main variables doings 
 #######################
 # Local file for the silly little display thingy
 latest_json_file="/usr/local/www/html/solar/latest.json"
 
+# Max lines in the solar5 spreadsheet to keep the numbers down
+max_lines=10000
+
 # Local file for CSV backup
 solar_csv_file=f'/media/solar/solar5/solar5_{datetime.now().strftime("%Y-%m-%d")}.csv'
 
 current_path=os.path.dirname(os.path.abspath(__file__))
+
 
 # Local time doings
 def localtime(inputTime):
@@ -178,6 +182,8 @@ def main():
           'O:O': numberFormat(type='DATE_TIME', pattern='yyyy-mm-dd hh:mm:ss')
       }
       sheet.format_and_fix_numbers(sheet.worksheet,column_formats)
+
+      sheet.trim_rows(max_rows)
 
   # Append to the solar csv file
       if not os.path.exists(solar_csv_file):
