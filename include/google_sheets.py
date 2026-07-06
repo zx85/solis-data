@@ -183,14 +183,20 @@ class Spreadsheet:
 
       return found
   
-  def trim_rows(self,max_rows):
+  def trim_rows(self,worksheet,max_rows):
+    log.debug("Row trimming")
     row_count = len(worksheet.get_all_values()) 
+    log.debug(f"Current rows: {row_count}")
     if row_count > max_rows+1:
     # How many need deleting
       rows_to_delete = row_count - (max_rows+1)
-    try:
-      worksheet.delete_rows(2, 1 + rows_to_delete)
-      return True
-    except Exception as e:
-      log.error(f'Failed to delete rows because {e}')
+      log.debug(f"Deleting {rows_to_delete} rows, then")
+      try:
+        worksheet.delete_rows(2, 1 + rows_to_delete)
+        return True
+      except Exception as e:
+        log.error(f'Failed to delete rows because {e}')
+        return False
+    else:
+      log.debug(f"Not deleting any rows")
       return False

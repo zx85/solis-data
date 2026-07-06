@@ -36,8 +36,8 @@ from include.google_sheets import Spreadsheet
 # Local file for the silly little display thingy
 latest_json_file="/usr/local/www/html/solar/latest.json"
 
-# Max lines in the solar5 spreadsheet to keep the numbers down
-max_lines=10000
+# Max rows in the solar5 spreadsheet to keep the numbers down
+max_rows=8000
 
 # Local file for CSV backup
 solar_csv_file=f'/media/solar/solar5/solar5_{datetime.now().strftime("%Y-%m-%d")}.csv'
@@ -183,7 +183,7 @@ def main():
       }
       sheet.format_and_fix_numbers(sheet.worksheet,column_formats)
 
-      sheet.trim_rows(max_rows)
+      sheet.trim_rows(sheet.worksheet, max_rows)
 
   # Append to the solar csv file
       if not os.path.exists(solar_csv_file):

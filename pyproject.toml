@@ -1,0 +1,14 @@
+[project]
+name = "solis-data"
+version = "0.1.0"
+description = "Get data from solis / home assistant"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "gspread>=6.2.1",
+    "gspread-formatting>=1.2.1",
+    "jmespath>=1.1.0",
+    "python-telegram-bot==22.8",
+    "pytz>=2026.2",
+    "requests>=2.34.2",
+]
